@@ -34,11 +34,11 @@ class ClientCore : public QObject
 
     public slots:
         void clientAlive();
+        void envoiHyperviseur();
         //void initConnexion(QString serveurIP, int serveurPort);
-        //void envoyer(QString mess);
 
     private slots:
-        //void donneesRecues();
+        void receptionHyperviseur();
         //void connecte();
         //void deconnecte();
 

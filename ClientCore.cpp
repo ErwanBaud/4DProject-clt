@@ -30,8 +30,6 @@ ClientCore::ClientCore()
             if ( !(udpBroadSocket->bind(appPort, QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)) )
                 QTextStream(stdout) << "    Erreur socket UDP." << endl;
             else
-                QTextStream(stdout) << "    Socket UDP ready." << endl;
-
                 connect(udpBroadSocket, SIGNAL(readyRead()), this, SLOT(clientAlive()));
 
                 // Le client est démarré et toutes ses sockets sont opérationnelles
@@ -118,6 +116,7 @@ void ClientCore::connexionHyperviseur()
     QTextStream(stdout) << "L'hyperviseur vient de se connecter : "
          << hyperviseur->peerAddress().toString() << ":" << hyperviseur->peerPort() << endl;
 
+    connect(hyperviseur, SIGNAL(readyRead()), this, SLOT(receptionHyperviseur()));
     connect(hyperviseur, SIGNAL(disconnected()), this, SLOT(deconnexionHyperviseur()));
 }
 
@@ -173,14 +172,16 @@ bool ClientCore::socketIsIn(QHostAddress host, quint16 port, QList<QTcpSocket *>
 }
 
 
-/*
-void Serveur::donneesRecues()
-{
-    // 1 : on reçoit un paquet (ou un sous-paquet) d'un des clients
 
-    // On détermine quel client envoie le message (recherche du QTcpSocket du client)
+/* Reception d'un paquet venant du serveur
+ * */
+void ClientCore::receptionHyperviseur()
+{
+    QTextStream(stdout) << "Message recu !" << endl;
+
+    // Recuperation socket
     QTcpSocket *socket = qobject_cast<QTcpSocket *>(sender());
-    if (socket == 0) // Si par hasard on n'a pas trouvé le client à l'origine du signal, on arrête la méthode
+    if (socket == 0) // Si par hasard on n'a pas trouvé, on arrête la méthode
         return;
 
     // Si tout va bien, on continue : on récupère le message
@@ -206,12 +207,32 @@ void Serveur::donneesRecues()
     in >> time;
     in >> messageRecu;
 
-
-    // 2 : on renvoie le message à tous les clients
-    cout << time.toString() << " - Recu de " << sender << " : " << messageRecu << endl;
+    QTextStream(stdout) << time.toString() << " - Recu de l'hyperviseur" << " : " << messageRecu << endl;
 
     // 3 : remise de la taille du message à 0 pour permettre la réception des futurs messages
     tailleMessage = 0;
+
+    envoiHyperviseur();
+}
+
+
+/* Envoi d'un message a l'hyperviseur
+ * */
+void ClientCore::envoiHyperviseur()
+{
+    // Préparation du paquet
+    QByteArray paquet;
+    QDataStream out(&paquet, QIODevice::WriteOnly);
+
+    out << (quint16) 0; // On écrit 0 au début du paquet pour réserver la place pour écrire la taille
+    out << host.toString() + ":" + QString::number(portC) << QTime::currentTime() << QString("Coucou hyp!");
+    out.device()->seek(0); // On se replace au début du paquet
+    out << (quint16) (paquet.size() - sizeof(quint16)); // On écrase le 0 qu'on avait réservé par la longueur du message
+
+
+    // Envoi du paquet préparé a l'hyperviseur
+    toServer->write(paquet);
+    QTextStream(stdout) << "Envoye a l'hyperviseur" << endl;
 }
 
 
