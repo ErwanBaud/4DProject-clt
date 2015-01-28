@@ -51,6 +51,9 @@ ClientCore::ClientCore()
 
                 connect(fromServer, SIGNAL(newConnection()), this, SLOT(connexionHyperviseur()));
                 connect(fromClient, SIGNAL(newConnection()), this, SLOT(connexionClient()));
+
+
+                QTextStream(stdout) << "From main thread: " << QThread::currentThreadId() << endl;
 }
 
 
@@ -67,6 +70,9 @@ void ClientCore::iamAlive()
     datagram.append("#");
     datagram.append(QByteArray::number(portC));
     udpBroadSocket->writeDatagram(datagram.data(), datagram.size(), QHostAddress::Broadcast, appPort);
+
+    QTextStream(stdout) << "ClientCore::iamAlive " << datagram << " get called from?: " << QThread::currentThreadId() << endl;
+
 }
 
 
@@ -177,7 +183,7 @@ bool ClientCore::socketIsIn(QHostAddress host, quint16 port, QList<QTcpSocket *>
  * */
 void ClientCore::receptionHyperviseur()
 {
-    QTextStream(stdout) << "Message recu !" << endl;
+    //QTextStream(stdout) << "Message recu !" << endl;
 
     // Recuperation socket
     QTcpSocket *socket = qobject_cast<QTcpSocket *>(sender());
@@ -201,18 +207,53 @@ void ClientCore::receptionHyperviseur()
 
 
     // Si on arrive jusqu'à cette ligne, on peut récupérer le message entier
-    QString sender, messageRecu;
+    QString sender;
+    Ordre ordre;
     QTime time;
     in >> sender;
     in >> time;
-    in >> messageRecu;
-
-    QTextStream(stdout) << time.toString() << " - Recu de l'hyperviseur" << " : " << messageRecu << endl;
+    in >> (int&) ordre;
 
     // 3 : remise de la taille du message à 0 pour permettre la réception des futurs messages
     tailleMessage = 0;
 
-    envoiHyperviseur();
+    switch( ordre )
+    {
+        case START:
+            QTextStream(stdout) << time.toString() << " : START recu de l'hyperviseur." << endl;
+
+            // Demarrer thread
+            startSimu();
+            break;
+
+        case PAUSE:
+            QTextStream(stdout) << time.toString() << " : PAUSE recu de l'hyperviseur." << endl;
+
+            // Mettre le thread en pause
+            QMetaObject::invokeMethod( simu, "sleep", Q_ARG( int, 5 ) );
+            break;
+
+        case STOP:
+            QTextStream(stdout) << time.toString() << " : STOP recu de l'hyperviseur." << endl;
+
+            // Stopper le thread
+            if( simuThread->isRunning() )
+                {
+                    simuThread->quit();
+                    simuThread->wait();
+                    simuThread->deleteLater();
+                    simuThread = NULL;
+                }
+            break;
+
+        default:
+            QTextStream(stdout) << "Ordre inconnu." << endl;
+            break;
+
+
+    }
+
+    //envoiHyperviseur();
 }
 
 
@@ -235,6 +276,29 @@ void ClientCore::envoiHyperviseur()
     QTextStream(stdout) << "Envoye a l'hyperviseur" << endl;
 }
 
+
+/* Lancement d'une simulation
+ * */
+void ClientCore::startSimu()
+{
+    if (!simuThread)
+    {
+        simuThread = new QThread();
+
+        simu = new Simu();
+
+        simu->moveToThread(simuThread); // La simu s'executera dans le thread
+
+        //connect(simu, SIGNAL(error(QString)), this, SLOT(errorString(QString)));
+        //connect(simuThread, SIGNAL(started()), simu, SLOT(compute()));
+        connect(tAlive, SIGNAL(timeout()), simu, SLOT(compute()));
+        connect(simu, SIGNAL(finished()), simuThread, SLOT(quit()));
+        connect(simu, SIGNAL(finished()), simu, SLOT(deleteLater()));
+        connect(simuThread, SIGNAL(finished()), simuThread, SLOT(deleteLater()));
+
+        simuThread->start();
+    }
+}
 
 /*
 // Envoi d'un message au serveur

@@ -3,12 +3,23 @@
 
 #include <QtNetwork>
 #include <QTextStream>
+#include "Simu.h"
+
+class Simu;
+
 
 /* ClientCore : Processus client
  * */
 class ClientCore : public QObject
 {
     Q_OBJECT
+
+    enum Ordre
+    {
+        START,
+        PAUSE,
+        STOP
+    };
 
     public:
         ClientCore();
@@ -32,6 +43,11 @@ class ClientCore : public QObject
 
         QTimer *tAlive; // Timer pour le broadcast iamAlive
 
+        QThread *simuThread;
+        Simu *simu;
+
+        void startSimu();
+
     public slots:
         void clientAlive();
         void envoiHyperviseur();
@@ -47,6 +63,9 @@ class ClientCore : public QObject
         void connexionClient(); //Slot executé lors de la connexion d'un client
         void deconnexionClient(); //Slot executé lors de la deconnexion d'un client
         void iamAlive(); // Envoi un broadcast annonçant la présence du processus client
+
+    signals:
+        void compute(const QString&, const QString &);
 };
 
 #endif

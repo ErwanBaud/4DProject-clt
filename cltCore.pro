@@ -16,7 +16,9 @@ TEMPLATE = app
 
 
 SOURCES += main.cpp \
-    ClientCore.cpp
+    ClientCore.cpp \
+    Simu.cpp
 
 HEADERS += \
-    ClientCore.h
+    ClientCore.h \
+    Simu.h
