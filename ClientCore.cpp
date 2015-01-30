@@ -2,6 +2,7 @@
 #include "ClientCore.h"
 
 #define tAliveTimer 2000
+#define tComputeTimer 500
 
 using namespace std;
 
@@ -36,12 +37,14 @@ ClientCore::ClientCore()
 
                 // Renseignement des attributs
                 tailleMessage = 0;
-                ready = false;
+                state = false;
                 host = fromServer->serverAddress();
                 portS = fromServer->serverPort();
                 portC = fromClient->serverPort();
 
-                QTextStream(stdout) << "I am alive on " + host.toString()<< " portS:" << portS << " portC:" << portC << endl;
+                connect(fromServer, SIGNAL(newConnection()), this, SLOT(connexionHyperviseur()));
+                connect(fromClient, SIGNAL(newConnection()), this, SLOT(connexionClient()));
+
 
                 // Initialisation des composants utiles au broadcast iamAlive
                 tAlive = new QTimer();
@@ -49,17 +52,15 @@ ClientCore::ClientCore()
                 connect(tAlive, SIGNAL(timeout()), this, SLOT(iamAlive()));
                 tAlive->start();
 
-                connect(fromServer, SIGNAL(newConnection()), this, SLOT(connexionHyperviseur()));
-                connect(fromClient, SIGNAL(newConnection()), this, SLOT(connexionClient()));
 
-
+                QTextStream(stdout) << "I am alive on " + host.toString()<< " portS:" << portS << " portC:" << portC << endl;
                 QTextStream(stdout) << "From main thread: " << QThread::currentThreadId() << endl;
 }
 
 
 /* Envoi du message iamAlive
- * du type host#portS#portC
- * exemple : "127.0.0.1#12345#67890"
+ * du type host#portS#portC#state
+ * exemple : "127.0.0.1#12345#67890#0"
  * */
 void ClientCore::iamAlive()
 {
@@ -69,10 +70,11 @@ void ClientCore::iamAlive()
     datagram.append(QByteArray::number(portS));
     datagram.append("#");
     datagram.append(QByteArray::number(portC));
+    datagram.append("#");
+    datagram.append(QString::number(state));
     udpBroadSocket->writeDatagram(datagram.data(), datagram.size(), QHostAddress::Broadcast, appPort);
 
-    QTextStream(stdout) << "ClientCore::iamAlive " << datagram << " get called from?: " << QThread::currentThreadId() << endl;
-
+    //QTextStream(stdout) << "ClientCore::iamAlive " << datagram << " get called from?: " << QThread::currentThreadId() << endl;
 }
 
 
@@ -165,7 +167,6 @@ void ClientCore::deconnexionClient()
 }
 
 
-
 /* Renvoie true si la socket correspondante est deja dans la liste others
  * */
 bool ClientCore::socketIsIn(QHostAddress host, quint16 port, QList<QTcpSocket *> &others)
@@ -178,13 +179,10 @@ bool ClientCore::socketIsIn(QHostAddress host, quint16 port, QList<QTcpSocket *>
 }
 
 
-
 /* Reception d'un paquet venant du serveur
  * */
 void ClientCore::receptionHyperviseur()
 {
-    //QTextStream(stdout) << "Message recu !" << endl;
-
     // Recuperation socket
     QTcpSocket *socket = qobject_cast<QTcpSocket *>(sender());
     if (socket == 0) // Si par hasard on n'a pas trouvé, on arrête la méthode
@@ -226,34 +224,17 @@ void ClientCore::receptionHyperviseur()
             startSimu();
             break;
 
-        case PAUSE:
-            QTextStream(stdout) << time.toString() << " : PAUSE recu de l'hyperviseur." << endl;
-
-            // Mettre le thread en pause
-            QMetaObject::invokeMethod( simu, "sleep", Q_ARG( int, 5 ) );
-            break;
-
         case STOP:
             QTextStream(stdout) << time.toString() << " : STOP recu de l'hyperviseur." << endl;
 
             // Stopper le thread
-            if( simuThread->isRunning() )
-                {
-                    simuThread->quit();
-                    simuThread->wait();
-                    simuThread->deleteLater();
-                    simuThread = NULL;
-                }
+            stopSimu();
             break;
 
         default:
             QTextStream(stdout) << "Ordre inconnu." << endl;
             break;
-
-
     }
-
-    //envoiHyperviseur();
 }
 
 
@@ -284,77 +265,56 @@ void ClientCore::startSimu()
     if (!simuThread)
     {
         simuThread = new QThread();
-
         simu = new Simu();
+
+        // Initialisation tCompute
+        tCompute = new QTimer();
+        tCompute->setInterval(tComputeTimer);
+        tCompute->start();
+        connect(tCompute, SIGNAL(timeout()), simu, SLOT(compute()));
 
         simu->moveToThread(simuThread); // La simu s'executera dans le thread
 
         //connect(simu, SIGNAL(error(QString)), this, SLOT(errorString(QString)));
         //connect(simuThread, SIGNAL(started()), simu, SLOT(compute()));
-        connect(tAlive, SIGNAL(timeout()), simu, SLOT(compute()));
         connect(simu, SIGNAL(finished()), simuThread, SLOT(quit()));
         connect(simu, SIGNAL(finished()), simu, SLOT(deleteLater()));
         connect(simuThread, SIGNAL(finished()), simuThread, SLOT(deleteLater()));
 
+        connect(simu, SIGNAL(xChanged(double)), this, SLOT(sendX(double)));
+
         simuThread->start();
+
+        state = true;
+
+        //QMetaObject::invokeMethod( simu, "computeM");
     }
 }
 
-/*
-// Envoi d'un message au serveur
-void ClientCore::envoyer(QString mess)
+
+/* Arret d'une simulation
+ * */
+void ClientCore::stopSimu()
 {
-    QByteArray paquet;
-    QDataStream out(&paquet, QIODevice::WriteOnly);
-
-    out << (quint16) 0;
-    out << hostPort << QTime::currentTime() << mess;
-    out.device()->seek(0);
-    out << (quint16) (paquet.size() - sizeof(quint16));
-
-    socket->write(paquet); // On envoie le paquet
-    socket->waitForBytesWritten();
-}
-
-// On a reçu un paquet (ou un sous-paquet)
-void ClientCore::donneesRecues()
-{
-    // Même principe que lorsque le serveur reçoit un paquet :
-    // On essaie de récupérer la taille du message
-    // Une fois qu'on l'a, on attend d'avoir reçu le message entier (en se basant sur la taille annoncée tailleMessage)
-
-    QDataStream in(socket);
-
-    if (tailleMessage == 0)
+    if (simuThread)
     {
-        if (socket->bytesAvailable() < (int)sizeof(quint16))
-             return;
+        if( simuThread->isRunning() )
+            {
+                simuThread->quit();
+                simuThread->wait();
+                simuThread->deleteLater();
+                simuThread = NULL;
 
-        in >> tailleMessage;
+                state = false;
+            }
     }
-
-    if (socket->bytesAvailable() < tailleMessage)
-        return;
-
-
-    // Si on arrive jusqu'à cette ligne, on peut récupérer le message entier
-    QString hostPort, messageRecu;
-    QTime time;
-    int ms;
-
-    in >> hostPort;
-    in >> time;
-    in >> messageRecu;
-
-    ms = QTime::currentTime().msecsTo(time);
-
-    // On affiche le message sur la zone de Chat
-   cout << hostPort.toStdString() << " " << ms << " : " << messageRecu.toStdString() << endl;
-
-    // On remet la taille du message à 0 pour pouvoir recevoir de futurs messages
-    tailleMessage = 0;
 }
 
 
-*/
+/* Envoi position X
+ * */
+void ClientCore::sendX(double x)
+{
+    QTextStream(stdout) << "ClientCore::sendX " << x << " get called from?: " << QThread::currentThreadId() << endl;
+}
 

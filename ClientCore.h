@@ -16,22 +16,21 @@ class ClientCore : public QObject
 
     enum Ordre
     {
-        START,
-        PAUSE,
+        START = 0,
         STOP
     };
 
     public:
         ClientCore();
-        bool ready = false; // Le client est il pret ?
 
-        bool socketIsIn(QHostAddress host, quint16 port, QList<QTcpSocket *> &others);
 
     private:
         QHostAddress host; // Adresse IP du client
         quint16 portS; // Port pour hyperviseur
         quint16 portC; // Port pour clients
         quint16 appPort; // Port sur lequel l'hyperviseur écoute
+
+        bool state = false; // Le client calcule (true) ou pas (false)
 
         QUdpSocket *udpBroadSocket; // Socket d'emission broadcast iamAlive
         QTcpServer *fromClient; // Socket d'écoute des clients
@@ -42,30 +41,29 @@ class ClientCore : public QObject
         quint16 tailleMessage;
 
         QTimer *tAlive; // Timer pour le broadcast iamAlive
+        QTimer *tCompute; // Timer pour compute()
 
-        QThread *simuThread;
-        Simu *simu;
+        QThread *simuThread; // Thread pour executer les objets Simu
+        Simu *simu; // Objet effectuant les calculs
 
         void startSimu();
-
-    public slots:
-        void clientAlive();
-        void envoiHyperviseur();
-        //void initConnexion(QString serveurIP, int serveurPort);
+        void stopSimu();
+        bool socketIsIn(QHostAddress host, quint16 port, QList<QTcpSocket *> &others);
 
     private slots:
-        void receptionHyperviseur();
-        //void connecte();
-        //void deconnecte();
+
+        void iamAlive(); // Envoi un broadcast annonçant la présence du processus client
+        void clientAlive(); // Reception d'un broadcast annonçant un processus client
 
         void connexionHyperviseur(); //Slot executé lors de la connexion de l'hyperviseur
+        void receptionHyperviseur();
+        void envoiHyperviseur();
         void deconnexionHyperviseur(); //Slot executé lors de la deconnexion de l'hyperviseur
+
         void connexionClient(); //Slot executé lors de la connexion d'un client
         void deconnexionClient(); //Slot executé lors de la deconnexion d'un client
-        void iamAlive(); // Envoi un broadcast annonçant la présence du processus client
 
-    signals:
-        void compute(const QString&, const QString &);
+        void sendX(double);
 };
 
 #endif
