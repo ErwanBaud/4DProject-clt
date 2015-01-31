@@ -4,7 +4,16 @@
 #include <QObject>
 #include <QDebug>
 #include <QThread>
+#include <QtGlobal>
+#include <QTime>
 #include <cstdlib>
+
+typedef struct
+{
+    double x;
+    double y;
+    double z;
+} Position;
 
 class Simu : public QObject
 {
@@ -14,16 +23,16 @@ class Simu : public QObject
         Simu();
 
     private:
-        double x;
+        Position p;
 
     private slots:
         void compute();
-        void sleep(int s);
+        void usleep(int us);
         //void computeM();
 
     signals:
         void finished();
-        void xChanged(double);
+        void positionChanged(Position);
         //void error(QString err);
 };
 

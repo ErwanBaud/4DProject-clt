@@ -7,7 +7,6 @@
 
 class Simu;
 
-
 /* ClientCore : Processus client
  * */
 class ClientCore : public QObject
@@ -22,6 +21,7 @@ class ClientCore : public QObject
 
     public:
         ClientCore();
+        QString hostPortSC; // Identité du client
 
 
     private:
@@ -37,6 +37,8 @@ class ClientCore : public QObject
         QTcpServer *fromServer; // Socket d'écoute de l'hyperviseur
         QTcpSocket *toServer; // Socket pour la communication vers l'hyperviseur
         QList<QTcpSocket *> others; // Sockets vers les autres clients
+
+        QMap<QString, Position> data;
 
         quint16 tailleMessage;
 
@@ -61,9 +63,11 @@ class ClientCore : public QObject
         void deconnexionHyperviseur(); //Slot executé lors de la deconnexion de l'hyperviseur
 
         void connexionClient(); //Slot executé lors de la connexion d'un client
+        void receptionClient();
+        void envoiClient(Position p);
         void deconnexionClient(); //Slot executé lors de la deconnexion d'un client
 
-        void sendX(double);
+        void sendPosition(Position);
 };
 
 #endif

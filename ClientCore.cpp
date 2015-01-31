@@ -2,7 +2,7 @@
 #include "ClientCore.h"
 
 #define tAliveTimer 2000
-#define tComputeTimer 500
+#define tComputeTimer 1000
 
 using namespace std;
 
@@ -41,6 +41,7 @@ ClientCore::ClientCore()
                 host = fromServer->serverAddress();
                 portS = fromServer->serverPort();
                 portC = fromClient->serverPort();
+                hostPortSC = host.toString() + ":" + QString::number(portS) + ":" + QString::number(portC);
 
                 connect(fromServer, SIGNAL(newConnection()), this, SLOT(connexionHyperviseur()));
                 connect(fromClient, SIGNAL(newConnection()), this, SLOT(connexionClient()));
@@ -148,6 +149,7 @@ void ClientCore::connexionClient()
     QTextStream(stdout) << "Un nouveau client vient de se connecter : "
          << nouveauClient->peerAddress().toString() << ":" << nouveauClient->peerPort() << endl;
 
+    connect(nouveauClient, SIGNAL(readyRead()), this, SLOT(receptionClient()));
     connect(nouveauClient, SIGNAL(disconnected()), this, SLOT(deconnexionClient()));
 }
 
@@ -258,6 +260,76 @@ void ClientCore::envoiHyperviseur()
 }
 
 
+/* Reception d'un paquet venant d'un client
+ * */
+void ClientCore::receptionClient()
+{
+    // Recuperation socket
+    QTcpSocket *socket = qobject_cast<QTcpSocket *>(sender());
+    if (socket == 0) // Si par hasard on n'a pas trouvé, on arrête la méthode
+        return;
+
+    // Si tout va bien, on continue : on récupère le message
+    QDataStream in(socket);
+
+    if (tailleMessage == 0) // Si on ne connaît pas encore la taille du message, on essaie de la récupérer
+    {
+        if (socket->bytesAvailable() < (int)sizeof(quint16)) // On n'a pas reçu la taille du message en entier
+             return;
+
+        in >> tailleMessage; // Si on a reçu la taille du message en entier, on la récupère
+    }
+
+    // Si on connaît la taille du message, on vérifie si on a reçu le message en entier
+    if (socket->bytesAvailable() < tailleMessage) // Si on n'a pas encore tout reçu, on arrête la méthode
+        return;
+
+
+    // Si on arrive jusqu'à cette ligne, on peut récupérer le message entier
+    QString sender;
+    Position p;
+    in >> sender;
+    in >> p.x;
+    in >> p.y;
+    in >> p.z;
+
+    data.insert(sender, p);
+
+    qDebug() << qSetRealNumberPrecision( 4 ) << "Position de " << sender << " recue - x:" << p.x << " y:"<< p.y << " z:"<< p.z;
+
+    qDebug() << "Affichage data : ";
+    QMapIterator<QString, Position> iter(data);
+    while(iter.hasNext())
+        {
+            iter.next();
+            qDebug() << qSetRealNumberPrecision( 4 ) << iter.key() << " - x:" << iter.value().x << " y:"<< iter.value().y << " z:"<< iter.value().z;
+        }
+
+    // 3 : remise de la taille du message à 0 pour permettre la réception des futurs messages
+    tailleMessage = 0;
+}
+
+
+/* Envoi de la position aux autres clients
+ * */
+void ClientCore::envoiClient(Position p)
+{
+    // Préparation du paquet
+    QByteArray paquet;
+    QDataStream out(&paquet, QIODevice::WriteOnly);
+
+    out << (quint16) 0; // On écrit 0 au début du paquet pour réserver la place pour écrire la taille
+    out << hostPortSC << p.x << p.y << p.z;
+    out.device()->seek(0); // On se replace au début du paquet
+    out << (quint16) (paquet.size() - sizeof(quint16)); // On écrase le 0 qu'on avait réservé par la longueur du message
+
+
+    // Envoi du paquet préparé à tous les autres clients
+    for(QList<QTcpSocket *>::Iterator clientIterator = others.begin(); clientIterator != others.end(); ++clientIterator )
+        (*clientIterator)->write(paquet);
+}
+
+
 /* Lancement d'une simulation
  * */
 void ClientCore::startSimu()
@@ -281,7 +353,8 @@ void ClientCore::startSimu()
         connect(simu, SIGNAL(finished()), simu, SLOT(deleteLater()));
         connect(simuThread, SIGNAL(finished()), simuThread, SLOT(deleteLater()));
 
-        connect(simu, SIGNAL(xChanged(double)), this, SLOT(sendX(double)));
+        qRegisterMetaType<Position>("Position");
+        connect(simu, SIGNAL(positionChanged(Position)), this, SLOT(sendPosition(Position)));
 
         simuThread->start();
 
@@ -311,10 +384,26 @@ void ClientCore::stopSimu()
 }
 
 
-/* Envoi position X
+/* Envoi position
  * */
-void ClientCore::sendX(double x)
+void ClientCore::sendPosition(Position p)
 {
-    QTextStream(stdout) << "ClientCore::sendX " << x << " get called from?: " << QThread::currentThreadId() << endl;
+    //QTextStream(stdout) << "ClientCore::sendPosition " << "" << " get called from?: " << QThread::currentThreadId() << endl;
+
+    // Rafraichissement position tableau interne
+    data.insert(hostPortSC, p);
+
+    // Envoi de la position aux autres
+    envoiClient(p);
+
+    //qDebug() << qSetRealNumberPrecision( 4 ) << hostPortSC << " - x:" << p.x << " y:"<< p.y << " z:"<< p.z << endl;
+
+    // Affichage data
+//    QMapIterator<QString, Position> iter(data);
+//    while(iter.hasNext())
+//        {
+//            iter.next();
+//            qDebug() << qSetRealNumberPrecision( 4 ) << iter.key() << " - x:" << iter.value().x << " y:"<< iter.value().y << " z:"<< iter.value().z << endl;
+//        }
 }
 

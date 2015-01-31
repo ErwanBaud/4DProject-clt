@@ -1,9 +1,37 @@
 #include "Simu.h"
 
+# define MAX 10
+
 Simu::Simu()
 {
-    x = 0;
+    p.x = 0.0;
+    p.y = 0.0;
+    p.z = 0.0;
 }
+
+
+void Simu::compute()
+{
+//    qDebug();
+//    qDebug() << "Simu::compute get called from?: " << QThread::currentThreadId();
+
+    qsrand(QTime::currentTime().msec());
+
+    usleep(qrand()%50);
+
+    p.x = (double) qrand() / (double) RAND_MAX * MAX;
+    p.y = (double) qrand() / (double) RAND_MAX * MAX;
+    p.z = (double) qrand() / (double) RAND_MAX * MAX;
+
+    emit positionChanged(p);
+}
+
+
+void Simu::usleep(int us) {
+    //qDebug() << "Simu::usleep(" << us << ") get called from?: " << QThread::currentThreadId();
+    QThread::usleep(us);
+}
+
 
 /*
 void Simu::computeM()
@@ -14,16 +42,5 @@ void Simu::computeM()
         sleep(2);
     }
 }
+
 */
-
-void Simu::compute()
-{
-    QTextStream(stdout) << "Simu::compute get called from?: " << QThread::currentThreadId() << endl;
-    x += rand()%10;
-    emit xChanged(x);
-}
-
-void Simu::sleep(int s) {
-    QTextStream(stdout) << "Simu::sleep get called from?: " << QThread::currentThreadId() << endl;
-    QThread::sleep(s);
-}
