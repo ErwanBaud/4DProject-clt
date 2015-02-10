@@ -17,8 +17,10 @@ TEMPLATE = app
 
 SOURCES += main.cpp \
     ClientCore.cpp \
-    Simu.cpp
+    Simu.cpp \
+    SslServer.cpp
 
 HEADERS += \
     ClientCore.h \
-    Simu.h
+    Simu.h \
+    SslServer.h

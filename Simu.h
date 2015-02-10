@@ -21,6 +21,7 @@ class Simu : public QObject
 
     public:
         Simu();
+        bool srand;
 
     private:
         Position p;
@@ -28,12 +29,10 @@ class Simu : public QObject
     private slots:
         void compute();
         void usleep(int us);
-        //void computeM();
 
     signals:
         void finished();
         void positionChanged(Position);
-        //void error(QString err);
 };
 
 #endif // SIMU_H

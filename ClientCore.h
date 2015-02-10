@@ -3,6 +3,8 @@
 
 #include <QtNetwork>
 #include <QTextStream>
+#include <QTime>
+#include "SslServer.h"
 #include "Simu.h"
 
 class Simu;
@@ -34,9 +36,12 @@ class ClientCore : public QObject
 
         QUdpSocket *udpBroadSocket; // Socket d'emission broadcast iamAlive
         QTcpServer *fromClient; // Socket d'écoute des clients
-        QTcpServer *fromServer; // Socket d'écoute de l'hyperviseur
-        QTcpSocket *toServer; // Socket pour la communication vers l'hyperviseur
-        QList<QTcpSocket *> others; // Sockets vers les autres clients
+
+        SslServer *fromServerSSL; // "Module" d'ecoute SSL
+        QSslSocket *toServerSSL; // Socket d'écoute de l'hyperviseur
+
+        QMap<QString, QTcpSocket *> toOthers; // Sockets vers les autres clients
+        QMap<QString, QTcpSocket *> fromOthers; // Sockets vers les autres clients
 
         QMap<QString, Position> data;
 
@@ -45,28 +50,41 @@ class ClientCore : public QObject
         QTimer *tAlive; // Timer pour le broadcast iamAlive
         QTimer *tCompute; // Timer pour compute()
 
+        quint16 n;
+        QTime *tChrono; // Time pour chronometrer
+        int time;
+        QTime timeTX;
+
         QThread *simuThread; // Thread pour executer les objets Simu
         Simu *simu; // Objet effectuant les calculs
 
         void startSimu();
         void stopSimu();
-        bool socketIsIn(QHostAddress host, quint16 port, QList<QTcpSocket *> &others);
+
 
     private slots:
 
         void iamAlive(); // Envoi un broadcast annonçant la présence du processus client
         void clientAlive(); // Reception d'un broadcast annonçant un processus client
 
+
         void connexionHyperviseur(); //Slot executé lors de la connexion de l'hyperviseur
-        void receptionHyperviseur();
-        void envoiHyperviseur();
         void deconnexionHyperviseur(); //Slot executé lors de la deconnexion de l'hyperviseur
 
+        void envoiHyperviseur();
+        void receptionHyperviseur();
+
+
         void connexionClient(); //Slot executé lors de la connexion d'un client
-        void receptionClient();
-        void envoiClient(Position p);
         void deconnexionClient(); //Slot executé lors de la deconnexion d'un client
 
+        void envoiData(Position p);
+        void receptionData();
+
+        void envoiACK(QTcpSocket *socket, uint id);
+        void receptionACK();
+
+        void displayData(); // Affiche toutes les positions stockées
         void sendPosition(Position);
 };
 

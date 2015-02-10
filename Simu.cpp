@@ -4,6 +4,7 @@
 
 Simu::Simu()
 {
+    srand = false;
     p.x = 0.0;
     p.y = 0.0;
     p.z = 0.0;
@@ -12,12 +13,18 @@ Simu::Simu()
 
 void Simu::compute()
 {
-//    qDebug();
-//    qDebug() << "Simu::compute get called from?: " << QThread::currentThreadId();
+    //qDebug() << endl << "Simu::compute get called from?: " << QThread::currentThreadId();
 
-    qsrand(QTime::currentTime().msec());
+    if( !srand )
+    {
+        qsrand(QTime::currentTime().msec() + (uint)QThread::currentThreadId());
+        srand = true;
+    }
 
-    usleep(qrand()%50);
+    usleep((qrand()%700) + 300);
+
+    // Consommation des données stockées
+
 
     p.x = (double) qrand() / (double) RAND_MAX * MAX;
     p.y = (double) qrand() / (double) RAND_MAX * MAX;
@@ -31,16 +38,3 @@ void Simu::usleep(int us) {
     //qDebug() << "Simu::usleep(" << us << ") get called from?: " << QThread::currentThreadId();
     QThread::usleep(us);
 }
-
-
-/*
-void Simu::computeM()
-{
-    for(;;)
-    {
-        QTextStream(stdout) << "Simu::computeM get called from?: " << QThread::currentThreadId() << endl;
-        sleep(2);
-    }
-}
-
-*/
