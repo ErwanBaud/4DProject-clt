@@ -18,7 +18,8 @@ class ClientCore : public QObject
     enum Ordre
     {
         START = 0,
-        STOP
+        STOP,
+        EXIT
     };
 
     public:
@@ -50,16 +51,25 @@ class ClientCore : public QObject
         QTimer *tAlive; // Timer pour le broadcast iamAlive
         QTimer *tCompute; // Timer pour compute()
 
-        quint16 n;
-        QTime *tChrono; // Time pour chronometrer
+        QElapsedTimer *tChrono; // Time pour chronometrer
+        quint64 total;
+        quint32 t;
+
         int time;
         QTime timeTX;
+        QTime timeTot;
+        quint32 n;
 
         QThread *simuThread; // Thread pour executer les objets Simu
         Simu *simu; // Objet effectuant les calculs
 
         void startSimu();
         void stopSimu();
+
+        QString log;
+        QTextStream logStream;
+        void doOnExit();
+        void writeLog();
 
 
     private slots:
@@ -71,7 +81,7 @@ class ClientCore : public QObject
         void connexionHyperviseur(); //Slot executé lors de la connexion de l'hyperviseur
         void deconnexionHyperviseur(); //Slot executé lors de la deconnexion de l'hyperviseur
 
-        void envoiHyperviseur();
+        void envoiHyperviseur(QString log);
         void receptionHyperviseur();
 
 

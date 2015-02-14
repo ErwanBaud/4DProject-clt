@@ -6,7 +6,7 @@
  * */
 void SslServer::incomingConnection(qintptr handle)
 {
-    qDebug() << "Incoming connection.";
+    //qDebug() << "Incoming connection.";
     QSslSocket *newSocket = new QSslSocket(this);
     if(!newSocket->setSocketDescriptor(handle))
         return;
@@ -16,7 +16,7 @@ void SslServer::incomingConnection(qintptr handle)
 
 QSslSocket* SslServer::nextPendingConnection()
 {
-    qDebug() << "Next pending connection.";
+    //qDebug() << "Next pending connection.";
     if(queue.isEmpty())
         return 0;
     else
@@ -25,6 +25,6 @@ QSslSocket* SslServer::nextPendingConnection()
 
 bool SslServer::hasPendingConnections() const
 {
-    qDebug() << "Has pending connection.";
+    //qDebug() << "Has pending connection.";
     return !queue.isEmpty();
 }

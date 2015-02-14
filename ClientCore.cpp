@@ -2,13 +2,18 @@
 #include "ClientCore.h"
 
 #define tAliveTimer 1000
-#define tComputeTimer 4000
+#define tComputeTimer 250
+#define ITER 500
 
 using namespace std;
 
 /****** Constructeur    *****/
+
 ClientCore::ClientCore()
 {
+    log = QString("");
+    logStream.setString(&log);
+    logStream << endl << QString("-------- Debut du log --------") << endl;
     appPort = 50885;
 
     // Demarrage du client
@@ -18,20 +23,32 @@ ClientCore::ClientCore()
 
     if (!fromServerSSL->listen(QHostAddress("127.0.0.1"), 0)) // Démarrage de l'ecoute hyperviseur sur un port aleatoire
     // Si l'ecoute hyperviseur n'a pas été démarré correctement
+    {
         QTextStream(stdout) << "L'ecoute hyperviseur n'a pas pu etre demarre. Raison : " + fromServerSSL->errorString() << endl;
+        logStream << "L'ecoute hyperviseur n'a pas pu etre demarre. Raison : " + fromServerSSL->errorString() << endl;
+    }
 
     else
+    {
         if (!fromClient->listen(QHostAddress("127.0.0.1"), 0)) // Démarrage de l'ecoute client sur un port aleatoire
             // Si l'ecoute client n'a pas été démarré correctement
+        {
             QTextStream(stdout) << "L'ecoute client n'a pas pu etre demarre. Raison : " + fromClient->errorString() << endl;
+            logStream << "L'ecoute client n'a pas pu etre demarre. Raison : " + fromClient->errorString() << endl;
+        }
         else
-
+        {
             // Initialisation des composants iamAlive
             udpBroadSocket = new QUdpSocket(this);
             if ( !(udpBroadSocket->bind(appPort, QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)) )
+            {
                 QTextStream(stdout) << "    Erreur socket UDP." << endl;
+                logStream << "    Erreur socket UDP." << endl;
+            }
             else
+            {
                 connect(udpBroadSocket, SIGNAL(readyRead()), this, SLOT(clientAlive()));
+            }
 
                 // Le client est démarré et toutes ses sockets sont opérationnelles
 
@@ -57,12 +74,17 @@ ClientCore::ClientCore()
                 tAlive->start();
 
                 // Chronometre
-                tChrono = new QTime();
-                tChrono->start();
+                tChrono = new QElapsedTimer();
 
+                total = 0;
+                t = 0;
 
                 QTextStream(stdout) << "I am alive on " + host.toString()<< " portS:" << portS << " portC:" << portC << endl;
                 QTextStream(stdout) << "From main thread: " << QThread::currentThreadId() << endl;
+                logStream << "I am alive on " + host.toString()<< " portS:" << portS << " portC:" << portC << endl;
+                logStream << "From main thread: " << QThread::currentThreadId() << endl;
+        }
+    }
 }
 
 
@@ -88,6 +110,7 @@ void ClientCore::iamAlive()
     udpBroadSocket->writeDatagram(datagram.data(), datagram.size(), QHostAddress::Broadcast, appPort);
 
     //QTextStream(stdout) << "ClientCore::iamAlive " << datagram << " get called from?: " << QThread::currentThreadId() << endl;
+    //logStream << "ClientCore::iamAlive " << datagram << " get called from?: " << QThread::currentThreadId() << endl;
 }
 
 
@@ -117,6 +140,7 @@ void ClientCore::clientAlive()
                  QTcpSocket *socket = new QTcpSocket(this);
 
                  QTextStream(stdout) << "    Tentative de connexion a " << peerPort << endl;
+                 logStream << "    Tentative de connexion a " << peerPort << endl;
 
                  socket->connectToHost(host, port); // On se connecte au serveur demandé
                  socket->waitForConnected();
@@ -127,6 +151,7 @@ void ClientCore::clientAlive()
                  toOthers.insert(peerPort, socket);
 
                  QTextStream(stdout) << "    Connecte a " << peerPort << endl;
+                 logStream << "    Connecte a " << peerPort << endl;
              }
          }
      }
@@ -145,8 +170,6 @@ void ClientCore::clientAlive()
  * */
 void ClientCore::connexionHyperviseur()
 {
-    qDebug() << "connexionHyperviseur";
-
     toServerSSL = fromServerSSL->nextPendingConnection();
 
     if ( toServerSSL )
@@ -164,6 +187,7 @@ void ClientCore::connexionHyperviseur()
         if(!file.open(QIODevice::ReadOnly))
         {
             qDebug() << "Erreur: Ouverture de la cle impossible (" << file.fileName() << ") : " << file.errorString();
+            logStream << "Erreur: Ouverture de la cle impossible (" << file.fileName() << ") : " << file.errorString() << endl;
             return;
         }
         QSslKey key( &file, QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey, "4DProject" );
@@ -180,7 +204,8 @@ void ClientCore::connexionHyperviseur()
         //certificat de la CA
         if(!toServerSSL->addCaCertificates(ca))
         {
-             qDebug() << "Erreur: Ouverture du certificat de CA impossible (" << ca << ")";
+            qDebug() << "Erreur: Ouverture du certificat de CA impossible (" << ca << ")";
+            logStream << "Erreur: Ouverture du certificat de CA impossible (" << ca << ")" << endl;
             return;
         }
 
@@ -188,9 +213,14 @@ void ClientCore::connexionHyperviseur()
 
        qDebug() << "L'hyperviseur vient de se connecter : "
                 << toServerSSL->peerAddress().toString() << ":" << toServerSSL->peerPort();
+       logStream << "L'hyperviseur vient de se connecter : "
+                << toServerSSL->peerAddress().toString() << ":" << toServerSSL->peerPort() << endl;
     }
     else
+    {
         qDebug() << "Probleme socket.";
+        logStream << "Probleme socket." << endl;
+    }
 }
 
 
@@ -199,6 +229,7 @@ void ClientCore::connexionHyperviseur()
 void ClientCore::deconnexionHyperviseur()
 {
     QTextStream(stdout) << "L'hyperviseur vient de se deconnecter." << endl;
+    logStream << "L'hyperviseur vient de se deconnecter." << endl;
     toServerSSL->deleteLater();
 }
 
@@ -208,21 +239,22 @@ void ClientCore::deconnexionHyperviseur()
 
 /* Envoi d'un message a l'hyperviseur
  * */
-void ClientCore::envoiHyperviseur()
+void ClientCore::envoiHyperviseur(QString log)
 {
     // Préparation du paquet
     QByteArray paquet;
     QDataStream out(&paquet, QIODevice::WriteOnly);
 
     out << (quint16) 0; // On écrit 0 au début du paquet pour réserver la place pour écrire la taille
-    out << host.toString() + ":" + QString::number(portC) << QTime::currentTime() << QString("Coucou hyp!");
+    out << host.toString() + ":" + QString::number(portC) << QTime::currentTime() << log;
     out.device()->seek(0); // On se replace au début du paquet
     out << (quint16) (paquet.size() - sizeof(quint16)); // On écrase le 0 qu'on avait réservé par la longueur du message
 
 
     // Envoi du paquet préparé a l'hyperviseur
     toServerSSL->write(paquet);
-    QTextStream(stdout) << "Envoye a l'hyperviseur" << endl;
+    toServerSSL->waitForBytesWritten();
+    QTextStream(stdout) << "Log envoye a l'hyperviseur." << endl;
 }
 
 
@@ -266,6 +298,7 @@ void ClientCore::receptionHyperviseur()
     {
         case START:
             QTextStream(stdout) << time.toString() << " : START recu de l'hyperviseur." << endl;
+            logStream << time.toString() << " : START recu de l'hyperviseur." << endl;
 
             // Demarrer thread
             startSimu();
@@ -273,13 +306,26 @@ void ClientCore::receptionHyperviseur()
 
         case STOP:
             QTextStream(stdout) << time.toString() << " : STOP recu de l'hyperviseur." << endl;
+            logStream << time.toString() << " : STOP recu de l'hyperviseur." << endl;
 
             // Stopper le thread
             stopSimu();
             break;
 
+        case EXIT:
+            QTextStream(stdout) << time.toString() << " : EXIT recu de l'hyperviseur." << endl;
+            logStream << time.toString() << " : EXIT recu de l'hyperviseur." << endl;
+
+            // Stopper le thread
+            stopSimu();
+
+            doOnExit();
+            exit(EXIT_SUCCESS);
+            break;
+
         default:
             QTextStream(stdout) << "Ordre inconnu." << endl;
+            logStream << "Ordre inconnu." << endl;
             break;
     }
 }
@@ -303,6 +349,7 @@ void ClientCore::connexionClient()
     QString peerPort = peer.toString() + ":" + QString::number(port);
 
     QTextStream(stdout) << peerPort << " vient de se connecter." << endl;
+    logStream << peerPort << " vient de se connecter." << endl;
 
     if( !fromOthers.contains(peerPort) )
     {
@@ -327,6 +374,8 @@ void ClientCore::deconnexionClient()
     QString peerPort = peer.toString() + ":" + QString::number(port);
 
     QTextStream(stdout) << peerPort << " vient de se deconnecter." << endl;
+    logStream << peerPort << " vient de se deconnecter." << endl;
+
     toOthers.remove(peerPort);
     fromOthers.remove(peerPort);
     socket->deleteLater();
@@ -342,8 +391,7 @@ void ClientCore::envoiData(Position p)
 {
     // Initialisation tChrono
     tChrono->restart();
-    timeTX = QTime::currentTime();
-    //qDebug() << "Envoi :" << tChrono->elapsed() << "ms.";
+    //timeTX = QTime::currentTime();
 
     // Préparation du paquet
     QByteArray paquet;
@@ -353,6 +401,8 @@ void ClientCore::envoiData(Position p)
 
     // ID pour ACK
     uint id = (uint)QThread::currentThreadId() * ((uint)p.x + (uint)p.y +(uint)p.z);
+
+    // Nombre ACK à recevoir
     n = toOthers.size();
 
     out << hostPortSC << id << p.x << p.y << p.z;
@@ -364,11 +414,9 @@ void ClientCore::envoiData(Position p)
     for(QMap<QString, QTcpSocket *>::Iterator clientIterator = toOthers.begin(); clientIterator != toOthers.end(); ++clientIterator )
     {
         (*clientIterator)->write(paquet);
-//        qDebug() << qSetRealNumberPrecision( 3 ) << hostPortSC << (*clientIterator)
-//                 << "Envoye" << id << " x:" << p.x << " y:"<< p.y << " z:"<< p.z;
+        //        qDebug() << qSetRealNumberPrecision( 3 ) << hostPortSC << (*clientIterator)
+        //                 << "Envoye" << id << " x:" << p.x << " y:"<< p.y << " z:"<< p.z;
     }
-
-    //qDebug() << "Fin Envoi :" << tChrono->elapsed() << "ms.";
 }
 
 
@@ -451,12 +499,11 @@ void ClientCore::envoiACK(QTcpSocket *socket, uint id)
  * */
 void ClientCore::receptionACK()
 {
-    //qDebug() << "ACK recu :" << tChrono->elapsed() << "ms.";
+    //qDebug() << "ACK recu :" << tChrono->nsecsElapsed() / 1000 << "us.";
     // Recuperation socket
     QTcpSocket *socket = qobject_cast<QTcpSocket *>(sender());
     if (socket == 0) // Si par hasard on n'a pas trouvé, on arrête la méthode
     {
-        qDebug() << "Pas trouve";
         return;
     }
 
@@ -467,7 +514,6 @@ void ClientCore::receptionACK()
     {
         if (socket->bytesAvailable() < (int)sizeof(quint16)) // On n'a pas reçu la taille du message en entier
         {
-            qDebug() << "Taille pas entier";
             return;
         }
 
@@ -477,7 +523,6 @@ void ClientCore::receptionACK()
     // Si on connaît la taille du message, on vérifie si on a reçu le message en entier
     if (socket->bytesAvailable() < tailleMessage) // Si on n'a pas encore tout reçu, on arrête la méthode
     {
-        qDebug() << "Msg pas entier";
         return;
     }
 
@@ -493,13 +538,12 @@ void ClientCore::receptionACK()
 
     --n;
 
-    qDebug() << "ClientCore::receptionClient TX is : " << timeTX.msecsTo(timeRX) << "ms." << endl;
-    //qDebug() << sender << socket << "Recu" << ack << id << tChrono->elapsed() << "ms.";
+    //qDebug() << "ClientCore::receptionClient TX is : " << timeTX.msecsTo(timeRX) << "ms." << endl;
 
     if( n == 0 )
     {
-        //time = tChrono->elapsed();
-        //qDebug() << "ClientCore::receptionClient all ACK delay is : " << time << "ms." << endl;
+        total += tChrono->nsecsElapsed();
+        ++t;
     }
 
     // Remise de la taille du message à 0 pour permettre la réception des futurs messages
@@ -507,6 +551,40 @@ void ClientCore::receptionACK()
 }
 
 
+
+    /*---   fermeture   ---*/
+
+/* Actions lors de la fermeture du client
+ * */
+void ClientCore::doOnExit()
+{
+    logStream << endl << QString("-------- Fin du log --------") << endl;
+
+    writeLog();
+    envoiHyperviseur(log);
+    //qDebug() << logStream.readAll();
+}
+
+
+
+/* Enregistrement du log dans un fichier
+ * */
+void ClientCore::writeLog()
+{
+    hostPortSC.replace(".", "_");
+    hostPortSC.replace(":", "_");
+
+    QString filename = QDir::home().filePath("4DProject/log/clt/" + hostPortSC + "_" + QDate::currentDate().toString(Qt::ISODate) + ".txt");
+    QFile file( filename );
+    if ( file.open(QIODevice::ReadWrite) )
+    {
+        QTextStream stream( &file );
+        stream << log << endl;
+        file.close();
+    }
+
+    logStream << endl << QString("*** Log saved to ") << filename << " ***" << endl;
+}
 
 
 
@@ -521,6 +599,13 @@ void ClientCore::startSimu()
     {
         simuThread = new QThread();
         simu = new Simu();
+
+        // On vide le QMap pour lancer plusieurs simu successives
+        data.clear();
+
+
+        total = 0;
+        t = 0;
 
         // Initialisation tCompute
         tCompute = new QTimer();
@@ -541,6 +626,9 @@ void ClientCore::startSimu()
 
         simuThread->start();
         state = true;
+
+        qDebug() << "Simu demarree.";
+        logStream << "Simu demarree." << endl;
     }
 }
 
@@ -561,11 +649,19 @@ void ClientCore::stopSimu()
                 simuThread = NULL;
 
                 state = false;
+                qDebug() << "Simu stoppee.";
+                logStream << "Simu stoppee." << endl;
             }
-    }
 
-    // Affichage donnees
-    displayData();
+        if( t )
+        {
+            qDebug() << endl << "ACK delay avg : " << (total/t)/1000 << "us.";
+            logStream << endl << "ACK delay avg : " << (total/t)/1000 << "us." << endl;
+        }
+
+        // Affichage donnees
+        displayData();
+    }
 
 }
 
@@ -576,16 +672,21 @@ void ClientCore::stopSimu()
  * */
 void ClientCore::displayData()
 {
-    qDebug();
-    qDebug() << "Data : ";
+    qDebug() << endl << "Data : ";
+    logStream << endl << "Data : " << endl;
+
     QMapIterator<QString, Position> iter(data);
     while(iter.hasNext())
         {
             iter.next();
-            qDebug() << qSetRealNumberPrecision( 3 ) << iter.key() << "  x:" << iter.value().x << " y:"<< iter.value().y << " z:"<< iter.value().z;
+            qDebug() << qSetRealNumberPrecision( 3 ) << iter.key()
+                     << "  x:" << iter.value().x << " y:"<< iter.value().y << " z:"<< iter.value().z;
+            logStream << qSetRealNumberPrecision( 3 ) << iter.key()
+                     << "  x:" << iter.value().x << " y:"<< iter.value().y << " z:"<< iter.value().z << endl;
         }
 
     qDebug();
+    logStream << endl;
 }
 
 
@@ -596,7 +697,14 @@ void ClientCore::displayData()
 void ClientCore::sendPosition(Position p)
 {
     //QTextStream(stdout) << "ClientCore::sendPosition " << "" << " get called from?: " << QThread::currentThreadId() << endl;
-
+/*
+    if( data.isEmpty() )
+    {
+        n = ITER * toOthers.size();
+        qDebug() << "n =" << n << "tChrono.start()";
+        tChrono->start();
+    }
+*/
     // Rafraichissement position tableau interne
     data.insert(hostPortSC, p);
 
