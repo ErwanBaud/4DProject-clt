@@ -8,6 +8,8 @@ QT       += core widgets network
 
 QT       -= gui
 
+QMAKE_CXXFLAGS += -fpermissive
+
 TARGET = cltCore
 CONFIG   += console
 CONFIG   -= app_bundle
