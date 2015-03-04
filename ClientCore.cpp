@@ -18,14 +18,14 @@ ClientCore::ClientCore()
 
     // Demarrage du client
     //fromServer = new QTcpServer(this); // Socket d'écoute hyperviseur
-    fromServerSSL = new SslServer(); // Socket d'écoute hyperviseur
+    serverSSL = new SslServer(); // Socket d'écoute hyperviseur
     fromClient = new QTcpServer(this); // Socket d'écoute clients
 
-    if (!fromServerSSL->listen(QHostAddress("127.0.0.1"), 0)) // Démarrage de l'ecoute hyperviseur sur un port aleatoire
+    if (!serverSSL->listen(QHostAddress("127.0.0.1"), 0)) // Démarrage de l'ecoute hyperviseur sur un port aleatoire
     // Si l'ecoute hyperviseur n'a pas été démarré correctement
     {
-        QTextStream(stdout) << "L'ecoute hyperviseur n'a pas pu etre demarre. Raison : " + fromServerSSL->errorString() << endl;
-        logStream << "L'ecoute hyperviseur n'a pas pu etre demarre. Raison : " + fromServerSSL->errorString() << endl;
+        QTextStream(stdout) << "L'ecoute hyperviseur n'a pas pu etre demarre. Raison : " + serverSSL->errorString() << endl;
+        logStream << "L'ecoute hyperviseur n'a pas pu etre demarre. Raison : " + serverSSL->errorString() << endl;
     }
 
     else
@@ -56,14 +56,14 @@ ClientCore::ClientCore()
                 tailleMessage = 0;
                 simuThread = 0;
                 state = false;
-                host = fromServerSSL->serverAddress();
-                portS = fromServerSSL->serverPort();
+                host = serverSSL->serverAddress();
+                portS = serverSSL->serverPort();
                 portC = fromClient->serverPort();
                 hostPortSC = host.toString() + ":" + QString::number(portS) + ":" + QString::number(portC);
 
-                toServerSSL = NULL;
+                fromServerSSL = NULL;
 
-                connect(fromServerSSL, SIGNAL(newConnection()), this, SLOT(connexionHyperviseur()));
+                connect(serverSSL, SIGNAL(newConnection()), this, SLOT(connexionHyperviseur()));
                 connect(fromClient, SIGNAL(newConnection()), this, SLOT(connexionClient()));
 
 
@@ -129,11 +129,12 @@ void ClientCore::clientAlive()
          mess = datagram.split('#');
 
          QHostAddress peer = QHostAddress(QString(mess[0]));
-         quint16 port = mess[2].toUShort();
+         quint16 port1 = mess[1].toUShort();
+         quint16 port2 = mess[2].toUShort();
 
-         QString peerPort = peer.toString() + ":" + QString::number(port);
+         QString peerPort = peer.toString() + ":" + QString::number(port1) + ":" + QString::number(port2);
 
-         if ( port != portC )
+         if ( peerPort != hostPortSC )
          {
              if( !toOthers.contains(peerPort))
              {
@@ -142,7 +143,7 @@ void ClientCore::clientAlive()
                  QTextStream(stdout) << "    Tentative de connexion a " << peerPort << endl;
                  logStream << "    Tentative de connexion a " << peerPort << endl;
 
-                 socket->connectToHost(host, port); // On se connecte au serveur demandé
+                 socket->connectToHost(host, port2); // On se connecte au serveur demandé
                  socket->waitForConnected();
 
                  connect(socket, SIGNAL(readyRead()), this, SLOT(receptionACK()));
@@ -170,12 +171,12 @@ void ClientCore::clientAlive()
  * */
 void ClientCore::connexionHyperviseur()
 {
-    toServerSSL = fromServerSSL->nextPendingConnection();
+    fromServerSSL = serverSSL->nextPendingConnection();
 
-    if ( toServerSSL )
+    if ( fromServerSSL )
     {
-        connect(toServerSSL, SIGNAL(readyRead()), this, SLOT(receptionHyperviseur()));
-        connect(toServerSSL, SIGNAL(disconnected()), this, SLOT(deconnexionHyperviseur()));
+        connect(fromServerSSL, SIGNAL(readyRead()), this, SLOT(receptionHyperviseur()));
+        connect(fromServerSSL, SIGNAL(disconnected()), this, SLOT(deconnexionHyperviseur()));
 
         QString serverKey = QDir::home().filePath("4DProject/4DProject-cert/server/server-key.pem");
         QString serverCrt = QDir::home().filePath("4DProject/4DProject-cert/server/server-crt.pem");
@@ -193,28 +194,28 @@ void ClientCore::connexionHyperviseur()
         QSslKey key( &file, QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey, "4DProject" );
         file.close();
 
-        toServerSSL->setPrivateKey(key);
+        fromServerSSL->setPrivateKey(key);
 
         //certificat local
-        toServerSSL->setLocalCertificate(serverCrt);
+        fromServerSSL->setLocalCertificate(serverCrt);
 
         //ne pas vérifier l'identité
-        toServerSSL->setPeerVerifyMode(QSslSocket::VerifyNone);
+        fromServerSSL->setPeerVerifyMode(QSslSocket::VerifyNone);
 
         //certificat de la CA
-        if(!toServerSSL->addCaCertificates(ca))
+        if(!fromServerSSL->addCaCertificates(ca))
         {
             qDebug() << "Erreur: Ouverture du certificat de CA impossible (" << ca << ")";
             logStream << "Erreur: Ouverture du certificat de CA impossible (" << ca << ")" << endl;
             return;
         }
 
-       toServerSSL->startServerEncryption();
+       fromServerSSL->startServerEncryption();
 
        qDebug() << "L'hyperviseur vient de se connecter : "
-                << toServerSSL->peerAddress().toString() << ":" << toServerSSL->peerPort();
+                << fromServerSSL->peerAddress().toString() << ":" << fromServerSSL->peerPort();
        logStream << "L'hyperviseur vient de se connecter : "
-                << toServerSSL->peerAddress().toString() << ":" << toServerSSL->peerPort() << endl;
+                << fromServerSSL->peerAddress().toString() << ":" << fromServerSSL->peerPort() << endl;
     }
     else
     {
@@ -230,7 +231,7 @@ void ClientCore::deconnexionHyperviseur()
 {
     QTextStream(stdout) << "L'hyperviseur vient de se deconnecter." << endl;
     logStream << "L'hyperviseur vient de se deconnecter." << endl;
-    toServerSSL->deleteLater();
+    fromServerSSL->deleteLater();
 }
 
 
@@ -252,8 +253,8 @@ void ClientCore::envoiHyperviseur(QString log)
 
 
     // Envoi du paquet préparé a l'hyperviseur
-    toServerSSL->write(paquet);
-    toServerSSL->waitForBytesWritten();
+    fromServerSSL->write(paquet);
+    fromServerSSL->waitForBytesWritten();
     QTextStream(stdout) << "Log envoye a l'hyperviseur." << endl;
 }
 

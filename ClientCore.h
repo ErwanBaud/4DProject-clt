@@ -38,8 +38,8 @@ class ClientCore : public QObject
         QUdpSocket *udpBroadSocket; // Socket d'emission broadcast iamAlive
         QTcpServer *fromClient; // Socket d'écoute des clients
 
-        SslServer *fromServerSSL; // "Module" d'ecoute SSL
-        QSslSocket *toServerSSL; // Socket d'écoute de l'hyperviseur
+        SslServer *serverSSL; // "Module" d'ecoute SSL
+        QSslSocket *fromServerSSL; // Socket d'écoute de l'hyperviseur
 
         QMap<QString, QTcpSocket *> toOthers; // Sockets vers les autres clients
         QMap<QString, QTcpSocket *> fromOthers; // Sockets vers les autres clients
