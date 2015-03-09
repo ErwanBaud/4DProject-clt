@@ -15,13 +15,19 @@ ClientCore::ClientCore()
     logStream.setString(&log);
     logStream << endl << QString("-------- Debut du log --------") << endl;
     appPort = 50885;
+    QHostAddress *add;
+
+    foreach (const QHostAddress &address, QNetworkInterface::allAddresses()) {
+        if (address.protocol() == QAbstractSocket::IPv4Protocol && address != QHostAddress(QHostAddress::LocalHost))
+            add= new QHostAddress(address.toString());
+    }
 
     // Demarrage du client
     //fromServer = new QTcpServer(this); // Socket d'écoute hyperviseur
     serverSSL = new SslServer(); // Socket d'écoute hyperviseur
     fromClient = new QTcpServer(this); // Socket d'écoute clients
 
-    if (!serverSSL->listen(QHostAddress("127.0.0.1"), 0)) // Démarrage de l'ecoute hyperviseur sur un port aleatoire
+    if (!serverSSL->listen(QHostAddress(add->toString()), 0)) // Démarrage de l'ecoute hyperviseur sur un port aleatoire
     // Si l'ecoute hyperviseur n'a pas été démarré correctement
     {
         QTextStream(stdout) << "L'ecoute hyperviseur n'a pas pu etre demarre. Raison : " + serverSSL->errorString() << endl;
@@ -30,7 +36,7 @@ ClientCore::ClientCore()
 
     else
     {
-        if (!fromClient->listen(QHostAddress("127.0.0.1"), 0)) // Démarrage de l'ecoute client sur un port aleatoire
+        if (!fromClient->listen(QHostAddress(add->toString()), 0)) // Démarrage de l'ecoute client sur un port aleatoire
             // Si l'ecoute client n'a pas été démarré correctement
         {
             QTextStream(stdout) << "L'ecoute client n'a pas pu etre demarre. Raison : " + fromClient->errorString() << endl;
